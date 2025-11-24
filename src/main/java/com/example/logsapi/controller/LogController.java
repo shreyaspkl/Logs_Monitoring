@@ -3,11 +3,11 @@ package com.example.logsapi.controller;
 import com.example.logsapi.model.Log;
 import com.example.logsapi.repository.LogRepository;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 import jakarta.persistence.criteria.Predicate;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -16,6 +16,7 @@ import java.util.stream.Collectors;
 @CrossOrigin(origins = "*")
 public class LogController {
     private final LogRepository repo;
+    private final DateTimeFormatter LOCAL_FMT = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
     public LogController(LogRepository repo) {
         this.repo = repo;
@@ -27,8 +28,7 @@ public class LogController {
     }
 
     /**
-     * Flexible filtered fetch. Pass any combination of params.
-     * Example: /api/logs?projectName=MyProj&appName=Web&level=ERROR&fromTs=2025-11-01T00:00:00&toTs=2025-11-06T00:00:00
+     * Flexible filtered fetch. Accepts fromTs/toTs as local ISO strings like "2025-11-05T12:30" or "2025-11-05T12:30:00".
      */
     @GetMapping
     public List<Log> getLogs(
@@ -36,9 +36,13 @@ public class LogController {
             @RequestParam(required = false) String appName,
             @RequestParam(required = false) String microservice,
             @RequestParam(required = false) String level,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fromTs,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime toTs
+            @RequestParam(required = false) String fromTs,
+            @RequestParam(required = false) String toTs
     ) {
+        // parse dates if present
+        LocalDateTime from = parseLocalDateTimeSafe(fromTs);
+        LocalDateTime to = parseLocalDateTimeSafe(toTs);
+
         Specification<Log> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
@@ -54,13 +58,12 @@ public class LogController {
             if (level != null && !level.isEmpty()) {
                 predicates.add(cb.equal(root.get("level"), level));
             }
-            if (fromTs != null) {
-                predicates.add(cb.greaterThanOrEqualTo(root.get("timestamp"), fromTs));
+            if (from != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("timestamp"), from));
             }
-            if (toTs != null) {
-                predicates.add(cb.lessThanOrEqualTo(root.get("timestamp"), toTs));
+            if (to != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("timestamp"), to));
             }
-            // order latest first
             query.orderBy(cb.desc(root.get("timestamp")));
             return cb.and(predicates.toArray(new Predicate[0]));
         };
@@ -68,27 +71,69 @@ public class LogController {
         return repo.findAll(spec);
     }
 
-    @GetMapping("/countByLevel")
-    public Map<String, Long> countByLevel() {
-        return repo.findAll()
-                .stream()
-                .collect(Collectors.groupingBy(Log::getLevel, Collectors.counting()));
-    }
-
+    /**
+     * Returns distinct values as arrays so frontend receives JSON arrays reliably.
+     */
     @GetMapping("/distinctValues")
-    public Map<String, Set<String>> distinctValues() {
+    public Map<String, List<String>> distinctValues() {
         List<Log> all = repo.findAll();
-        Set<String> projects = all.stream().map(Log::getProjectName).filter(Objects::nonNull).collect(Collectors.toSet());
-        Set<String> apps = all.stream().map(Log::getAppName).filter(Objects::nonNull).collect(Collectors.toSet());
-        Set<String> microservices = all.stream().map(Log::getMicroservice).filter(Objects::nonNull).collect(Collectors.toSet());
-        Set<String> levels = all.stream().map(Log::getLevel).filter(Objects::nonNull).collect(Collectors.toSet());
 
-        Map<String, Set<String>> result = new HashMap<>();
+        List<String> projects = all.stream()
+                .map(Log::getProjectName)
+                .filter(Objects::nonNull)
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
+
+        List<String> apps = all.stream()
+                .map(Log::getAppName)
+                .filter(Objects::nonNull)
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
+
+        List<String> microservices = all.stream()
+                .map(Log::getMicroservice)
+                .filter(Objects::nonNull)
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
+
+        List<String> levels = all.stream()
+                .map(Log::getLevel)
+                .filter(Objects::nonNull)
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
+
+        Map<String, List<String>> result = new HashMap<>();
         result.put("projects", projects);
         result.put("apps", apps);
         result.put("microservices", microservices);
         result.put("levels", levels);
         return result;
+    }
+
+    private LocalDateTime parseLocalDateTimeSafe(String s) {
+        if (s == null || s.isEmpty()) return null;
+        // Accept input like "2025-11-05T12:30" or "2025-11-05T12:30:00"
+        try {
+            // Ensure seconds exist; ISO_LOCAL_DATE_TIME accepts "HH:mm:ss" or "HH:mm"
+            if (s.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$")) {
+                s = s + ":00";
+            }
+            return LocalDateTime.parse(s, LOCAL_FMT);
+        } catch (Exception ex) {
+            // parsing failed; return null so filter is ignored
+            return null;
+        }
+    }
+
+    @GetMapping("/countByLevel")
+    public Map<String, Long> countByLevel() {
+        return repo.findAll()
+                .stream()
+                .collect(Collectors.groupingBy(Log::getLevel, Collectors.counting()));
     }
 
     @GetMapping("/test")
