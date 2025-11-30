@@ -11,6 +11,9 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 import java.util.HashMap;
+import org.springframework.security.core.Authentication;
+import org.springframework.http.HttpStatus;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -73,5 +76,30 @@ public class AuthController {
 
         String token = jwtService.generateToken(username);
         return ResponseEntity.ok(Map.of("token", token));
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<?> me(Authentication authentication) {
+        // authentication will be null if request not authenticated
+        if (authentication == null || authentication.getName() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "unauthenticated"));
+        }
+
+        String username = authentication.getName();
+        Optional<User> userOpt = userRepo.findByUsername(username);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "user not found"));
+        }
+
+        User u = userOpt.get();
+        // return a safe DTO (avoid returning passwordHash)
+        Map<String, Object> safe = Map.of(
+                "id", u.getId(),
+                "username", u.getUsername(),
+                "email", u.getEmail(),
+                "createdAt", u.getCreatedAt()
+        );
+
+        return ResponseEntity.ok(safe);
     }
 }
