@@ -3,6 +3,7 @@ package com.example.logsapi.controller;
 import com.example.logsapi.model.User;
 import com.example.logsapi.repository.UserRepository;
 import com.example.logsapi.utility.JwtService;
+import com.example.logsapi.service.AuthorizationService;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -14,6 +15,7 @@ import java.util.HashMap;
 import org.springframework.security.core.Authentication;
 import org.springframework.http.HttpStatus;
 import java.util.Optional;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -23,6 +25,8 @@ public class AuthController {
     @Autowired private UserRepository userRepo;
     @Autowired private PasswordEncoder passwordEncoder;
     @Autowired private JwtService jwtService;
+
+    @Autowired private AuthorizationService authorizationService;
 
     // Register (create account)
     @PostMapping("/register")
@@ -47,12 +51,12 @@ public class AuthController {
         u.setPasswordHash(passwordEncoder.encode(password));
         userRepo.save(u);
 
-        // optionally auto-login after register: generate JWT
+        // auto-login after register
         String token = jwtService.generateToken(username);
-        Map<String,Object> res = new HashMap<>();
-        res.put("message", "registered");
-        res.put("token", token);
-        return ResponseEntity.ok(res);
+        return ResponseEntity.ok(Map.of(
+                "message", "registered",
+                "token", token
+        ));
     }
 
     // Login (sign in)
@@ -78,11 +82,12 @@ public class AuthController {
         return ResponseEntity.ok(Map.of("token", token));
     }
 
+    // Who am I?
     @GetMapping("/me")
     public ResponseEntity<?> me(Authentication authentication) {
-        // authentication will be null if request not authenticated
-        if (authentication == null || authentication.getName() == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "unauthenticated"));
+        if (authentication == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "unauthenticated"));
         }
 
         String username = authentication.getName();
@@ -92,14 +97,24 @@ public class AuthController {
         }
 
         User u = userOpt.get();
-        // return a safe DTO (avoid returning passwordHash)
-        Map<String, Object> safe = Map.of(
+
+        return ResponseEntity.ok(Map.of(
                 "id", u.getId(),
                 "username", u.getUsername(),
                 "email", u.getEmail(),
                 "createdAt", u.getCreatedAt()
-        );
+        ));
+    }
 
-        return ResponseEntity.ok(safe);
+    // List projects the user has permission to view
+    @GetMapping("/projects")
+    public ResponseEntity<?> myProjects(Authentication authentication) {
+        if (authentication == null) {
+            return ResponseEntity.status(401).body(Map.of("error","unauthenticated"));
+        }
+
+        String username = authentication.getName();
+        List<String> projects = authorizationService.getProjectNamesForUser(username);
+        return ResponseEntity.ok(Map.of("projects", projects));
     }
 }

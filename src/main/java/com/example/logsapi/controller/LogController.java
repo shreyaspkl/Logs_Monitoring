@@ -1,10 +1,17 @@
 package com.example.logsapi.controller;
 
 import com.example.logsapi.model.Log;
+import com.example.logsapi.model.User;
 import com.example.logsapi.repository.LogRepository;
+import com.example.logsapi.repository.UserRepository;
+import com.example.logsapi.service.AuthorizationService;
+
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.web.bind.annotation.*;
 import jakarta.persistence.criteria.Predicate;
+
+import org.springframework.security.core.Authentication;
+import org.springframework.http.ResponseEntity;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -13,13 +20,19 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/logs")
-//@CrossOrigin(origins = "*")
+@CrossOrigin(origins = "*")
 public class LogController {
+
     private final LogRepository repo;
+    private final UserRepository userRepo;
+    private final AuthorizationService authorizationService;
+
     private final DateTimeFormatter LOCAL_FMT = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
-    public LogController(LogRepository repo) {
+    public LogController(LogRepository repo, UserRepository userRepo, AuthorizationService authorizationService) {
         this.repo = repo;
+        this.userRepo = userRepo;
+        this.authorizationService = authorizationService;
     }
 
     @PostMapping
@@ -28,18 +41,54 @@ public class LogController {
     }
 
     /**
-     * Flexible filtered fetch. Accepts fromTs/toTs as local ISO strings like "2025-11-05T12:30" or "2025-11-05T12:30:00".
+     * GET /api/logs — with RBAC check added
      */
     @GetMapping
-    public List<Log> getLogs(
+    public ResponseEntity<?> getLogs(
             @RequestParam(required = false) String projectName,
             @RequestParam(required = false) String appName,
             @RequestParam(required = false) String microservice,
             @RequestParam(required = false) String level,
             @RequestParam(required = false) String fromTs,
-            @RequestParam(required = false) String toTs
+            @RequestParam(required = false) String toTs,
+            Authentication auth
     ) {
-        // parse dates if present
+
+        // Must be logged in to fetch logs
+        if (auth == null) {
+            return ResponseEntity.status(403).body(Map.of("error", "unauthenticated"));
+        }
+
+        String username = auth.getName();
+        User user = userRepo.findByUsername(username).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(403).body(Map.of("error","invalid user"));
+        }
+
+        Long userId = user.getId();
+
+        // ***********************
+        // 🔐 Project Access Check
+        // ***********************
+
+        if (projectName != null && !projectName.isEmpty()) {
+            if (!authorizationService.canViewProject(username, projectName)) {
+                return ResponseEntity.status(403).body(
+                        Map.of("error", "No access to project: " + projectName)
+                );
+            }
+        } else {
+            // No project specified — only ADMIN can view all logs
+            if (!authorizationService.isAdmin(userId)) {
+                return ResponseEntity.status(403).body(
+                        Map.of("error", "Specify a project or be ADMIN")
+                );
+            }
+        }
+
+        // ***********************
+        // Existing Filtering Logic
+        // ***********************
         LocalDateTime from = parseLocalDateTimeSafe(fromTs);
         LocalDateTime to = parseLocalDateTimeSafe(toTs);
 
@@ -64,67 +113,43 @@ public class LogController {
             if (to != null) {
                 predicates.add(cb.lessThanOrEqualTo(root.get("timestamp"), to));
             }
+
             query.orderBy(cb.desc(root.get("timestamp")));
             return cb.and(predicates.toArray(new Predicate[0]));
         };
 
-        return repo.findAll(spec);
+        return ResponseEntity.ok(repo.findAll(spec));
     }
 
-    /**
-     * Returns distinct values as arrays so frontend receives JSON arrays reliably.
-     */
     @GetMapping("/distinctValues")
     public Map<String, List<String>> distinctValues() {
         List<Log> all = repo.findAll();
 
-        List<String> projects = all.stream()
-                .map(Log::getProjectName)
-                .filter(Objects::nonNull)
-                .distinct()
-                .sorted()
-                .collect(Collectors.toList());
-
-        List<String> apps = all.stream()
-                .map(Log::getAppName)
-                .filter(Objects::nonNull)
-                .distinct()
-                .sorted()
-                .collect(Collectors.toList());
-
-        List<String> microservices = all.stream()
-                .map(Log::getMicroservice)
-                .filter(Objects::nonNull)
-                .distinct()
-                .sorted()
-                .collect(Collectors.toList());
-
-        List<String> levels = all.stream()
-                .map(Log::getLevel)
-                .filter(Objects::nonNull)
-                .distinct()
-                .sorted()
-                .collect(Collectors.toList());
-
         Map<String, List<String>> result = new HashMap<>();
-        result.put("projects", projects);
-        result.put("apps", apps);
-        result.put("microservices", microservices);
-        result.put("levels", levels);
+        result.put("projects", distinct(all, Log::getProjectName));
+        result.put("apps", distinct(all, Log::getAppName));
+        result.put("microservices", distinct(all, Log::getMicroservice));
+        result.put("levels", distinct(all, Log::getLevel));
         return result;
+    }
+
+    private List<String> distinct(List<Log> all, java.util.function.Function<Log, String> getter) {
+        return all.stream()
+                .map(getter)
+                .filter(Objects::nonNull)
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
     }
 
     private LocalDateTime parseLocalDateTimeSafe(String s) {
         if (s == null || s.isEmpty()) return null;
-        // Accept input like "2025-11-05T12:30" or "2025-11-05T12:30:00"
         try {
-            // Ensure seconds exist; ISO_LOCAL_DATE_TIME accepts "HH:mm:ss" or "HH:mm"
             if (s.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$")) {
                 s = s + ":00";
             }
             return LocalDateTime.parse(s, LOCAL_FMT);
         } catch (Exception ex) {
-            // parsing failed; return null so filter is ignored
             return null;
         }
     }
@@ -138,7 +163,7 @@ public class LogController {
 
     @GetMapping("/test")
     public String testApi() {
-        return "✅ Log Monitoring API is up and running!";
+        return "API Running!";
     }
 
     @PostMapping("/receive")
