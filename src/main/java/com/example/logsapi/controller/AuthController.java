@@ -14,7 +14,7 @@ import com.example.logsapi.utility.JwtService;
 
 @RestController
 @RequestMapping("/auth")
-@CrossOrigin(origins = "*")
+//@CrossOrigin(origins = "*")
 public class AuthController {
 
     @Autowired
