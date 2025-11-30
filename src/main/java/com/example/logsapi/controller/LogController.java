@@ -13,7 +13,7 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/logs")
-@CrossOrigin(origins = "*")
+//@CrossOrigin(origins = "*")
 public class LogController {
     private final LogRepository repo;
     private final DateTimeFormatter LOCAL_FMT = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
