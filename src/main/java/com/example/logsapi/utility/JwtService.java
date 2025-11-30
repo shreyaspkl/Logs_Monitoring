@@ -18,7 +18,7 @@ public class JwtService {
 
     @PostConstruct
     public void init() {
-        String secretBase64="yV3gq1n8Q4vR9sA7mT1KpV2zU0xY6bC3d4e5f6g7h8=";
+        String secretBase64="JKSYmlW0VkYZ85trk9H538iAvq34u5Op8pQaSEoHJnE=";
         if (secretBase64 == null || secretBase64.isBlank()) {
             throw new IllegalStateException("JWT secret is not configured (jwt.secret-base64 / JWT_SECRET_BASE64)");
         }
