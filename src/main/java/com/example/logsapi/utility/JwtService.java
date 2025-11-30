@@ -14,14 +14,11 @@ import java.util.Date;
 @Service
 public class JwtService {
 
-    // try property first, then env var style
-    @Value("${jwt.secret-base64:${JWT_SECRET_BASE64:}}")
-    private String secretBase64;
-
     private SecretKey key;
 
     @PostConstruct
     public void init() {
+        String secretBase64="yV3gq1n8Q4vR9sA7mT1KpV2zU0xY6bC3d4e5f6g7h8=";
         if (secretBase64 == null || secretBase64.isBlank()) {
             throw new IllegalStateException("JWT secret is not configured (jwt.secret-base64 / JWT_SECRET_BASE64)");
         }
