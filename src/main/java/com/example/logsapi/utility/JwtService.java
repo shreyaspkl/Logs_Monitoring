@@ -1,15 +1,13 @@
 package com.example.logsapi.utility;
 
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.*;
 import org.springframework.stereotype.Service;
-
 import java.util.Date;
 
 @Service
 public class JwtService {
 
-    private final String SECRET = "YOUR_SECRET_KEY_CHANGE_IT";
+    private final String SECRET = "CHANGE_THIS_SECRET_KEY";
 
     public String generateToken(String username) {
         return Jwts.builder()
@@ -28,4 +26,3 @@ public class JwtService {
                 .getSubject();
     }
 }
-
