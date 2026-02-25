@@ -15,10 +15,10 @@ import java.util.Date;
 public class JwtService {
 
     private SecretKey key;
-
+    @Value("${jwt.secret-base64}")
+    private String secretBase64;
     @PostConstruct
     public void init() {
-        String secretBase64="JKSYmlW0VkYZ85trk9H538iAvq34u5Op8pQaSEoHJnE=";
         if (secretBase64 == null || secretBase64.isBlank()) {
             throw new IllegalStateException("JWT secret is not configured (jwt.secret-base64 / JWT_SECRET_BASE64)");
         }
