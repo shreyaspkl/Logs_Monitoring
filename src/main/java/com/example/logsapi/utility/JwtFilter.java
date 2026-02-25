@@ -39,16 +39,23 @@ public class JwtFilter extends OncePerRequestFilter {
         }
 
         String token = auth.substring(7);
-        String username = jwtService.validateAndGetUsername(token);
 
-        User user = userRepo.findByUsername(username).orElse(null);
+        try {
+            String username = jwtService.validateAndGetUsername(token);
 
-        if (user != null) {
-            UsernamePasswordAuthenticationToken authToken =
-                    new UsernamePasswordAuthenticationToken(
-                            username, null, List.of()
-                    );
-            SecurityContextHolder.getContext().setAuthentication(authToken);
+            if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                User user = userRepo.findByUsername(username).orElse(null);
+
+                if (user != null) {
+                    UsernamePasswordAuthenticationToken authToken =
+                            new UsernamePasswordAuthenticationToken(
+                                    username, null, List.of()
+                            );
+                    SecurityContextHolder.getContext().setAuthentication(authToken);
+                }
+            }
+        } catch (Exception ex) {
+            // Invalid or expired token; leave request unauthenticated
         }
 
         chain.doFilter(req, res);
