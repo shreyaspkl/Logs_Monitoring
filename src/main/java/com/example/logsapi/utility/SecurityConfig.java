@@ -39,7 +39,8 @@ public class SecurityConfig {
                         // open auth endpoints (note actual path is /api/auth/* if you have a top-level /api)
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/auth/**").permitAll()
-                        .requestMatchers("/api/logs/**").permitAll()
+                        .requestMatchers("/api/logs/test").permitAll()
+                        .requestMatchers("/api/logs/**").authenticated()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
