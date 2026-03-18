@@ -1,7 +1,11 @@
 package com.example.logsapi.controller;
 
+import com.example.logsapi.DTOs.LoginRequestDto;
+import com.example.logsapi.DTOs.LoginResponseDto;
+import com.example.logsapi.DTOs.SignupResponseDto;
 import com.example.logsapi.model.User;
 import com.example.logsapi.repository.UserRepository;
+import com.example.logsapi.utility.AuthService;
 import com.example.logsapi.utility.JwtService;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,7 +17,6 @@ import java.util.Map;
 import java.util.HashMap;
 import org.springframework.security.core.Authentication;
 import org.springframework.http.HttpStatus;
-import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -23,83 +26,29 @@ public class AuthController {
     @Autowired private UserRepository userRepo;
     @Autowired private PasswordEncoder passwordEncoder;
     @Autowired private JwtService jwtService;
-
-    // Register (create account)
+    @Autowired private  AuthService authService;
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody Map<String,String> body) {
-        String username = body.get("username");
-        String email = body.get("email");
-        String password = body.get("password");
-
-        if (username == null || email == null || password == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "username, email and password are required"));
-        }
-        if (userRepo.existsByUsername(username)) {
-            return ResponseEntity.badRequest().body(Map.of("error", "username already exists"));
-        }
-        if (userRepo.existsByEmail(email)) {
-            return ResponseEntity.badRequest().body(Map.of("error", "email already exists"));
-        }
-
-        User u = new User();
-        u.setUsername(username);
-        u.setEmail(email);
-        u.setPasswordHash(passwordEncoder.encode(password));
-        userRepo.save(u);
-
-        // optionally auto-login after register: generate JWT
-        String token = jwtService.generateToken(username);
-        Map<String,Object> res = new HashMap<>();
-        res.put("message", "registered");
-        res.put("token", token);
-        return ResponseEntity.ok(res);
+    public ResponseEntity<SignupResponseDto> signup(@RequestBody LoginRequestDto loginRequestDto){
+        return ResponseEntity.ok(authService.signup(loginRequestDto));
     }
 
-    // Login (sign in)
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody Map<String,String> body) {
-        String username = body.get("username");
-        String password = body.get("password");
-
-        if (username == null || password == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "username and password required"));
-        }
-
-        var userOpt = userRepo.findByUsername(username);
-        if (userOpt.isEmpty()) {
-            return ResponseEntity.status(403).body(Map.of("error","invalid credentials"));
-        }
-        User user = userOpt.get();
-        if (!passwordEncoder.matches(password, user.getPasswordHash())) {
-            return ResponseEntity.status(403).body(Map.of("error","invalid credentials"));
-        }
-
-        String token = jwtService.generateToken(username);
-        return ResponseEntity.ok(Map.of("token", token));
+    public ResponseEntity<LoginResponseDto> login(@RequestBody LoginRequestDto loginRequestDto) {
+        return ResponseEntity.ok(authService.login(loginRequestDto));
     }
-
     @GetMapping("/me")
     public ResponseEntity<?> me(Authentication authentication) {
-        // authentication will be null if request not authenticated
-        if (authentication == null || authentication.getName() == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "unauthenticated"));
+        if (authentication == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        String username = authentication.getName();
-        Optional<User> userOpt = userRepo.findByUsername(username);
-        if (userOpt.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "user not found"));
-        }
+        User user = (User) authentication.getPrincipal();
 
-        User u = userOpt.get();
-        // return a safe DTO (avoid returning passwordHash)
-        Map<String, Object> safe = Map.of(
-                "id", u.getId(),
-                "username", u.getUsername(),
-                "email", u.getEmail(),
-                "createdAt", u.getCreatedAt()
-        );
+        Map<String, Object> response = new HashMap<>();
+        response.put("id", user.getId());
+        response.put("username", user.getUsername());
+        response.put("email", user.getEmail());
 
-        return ResponseEntity.ok(safe);
+        return ResponseEntity.ok(response);
     }
 }
