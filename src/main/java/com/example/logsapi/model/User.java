@@ -1,19 +1,38 @@
 package com.example.logsapi.model;
 
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.NoArgsConstructor;
+import org.apache.logging.log4j.util.Lazy;
+import org.hibernate.annotations.CreationTimestamp;
+import org.springframework.boot.autoconfigure.elasticsearch.ElasticsearchConnectionDetails;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 @Entity
 @Table(name="users")
-public class User {
+@AllArgsConstructor
+@NoArgsConstructor
+@Builder
+public class User implements UserDetails {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     private String username;
+    @Column(unique = true, nullable = false)
     private String email;
-    private String passwordHash;
+    private String password;
+    @CreationTimestamp
+    @Column(updatable = false)
+    private LocalDateTime createdAt;
 
     public Long getId() {
         return id;
@@ -22,6 +41,16 @@ public class User {
     public void setId(Long id) {
         this.id = id;
     }
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        return List.of();
+    }
+
+    @Override
+    public String getPassword() {
+        return password;
+    }
+
 
     public String getUsername() {
         return username;
@@ -39,13 +68,6 @@ public class User {
         this.email = email;
     }
 
-    public String getPasswordHash() {
-        return passwordHash;
-    }
-
-    public void setPasswordHash(String passwordHash) {
-        this.passwordHash = passwordHash;
-    }
 
     public LocalDateTime getCreatedAt() {
         return createdAt;
@@ -55,7 +77,6 @@ public class User {
         this.createdAt = createdAt;
     }
 
-    private LocalDateTime createdAt = LocalDateTime.now();
 
     // getters/setters
 }
