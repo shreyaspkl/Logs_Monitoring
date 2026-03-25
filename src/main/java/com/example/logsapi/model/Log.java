@@ -11,6 +11,14 @@ public class Log {
     private Long id;
 
     // explicit column mapping to avoid any naming strategy mismatch
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "project_id")
+    private Project project;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private EnvironmentType environment;
+
     @Column(name = "project_name")
     private String projectName;
 
@@ -34,7 +42,11 @@ public class Log {
 
     // ------------------ GETTERS ------------------
     public Long getId() { return id; }
+    public Project getProject() { return project; }
+    public void setProject(Project project) { this.project = project; }
 
+    public EnvironmentType getEnvironment() { return environment; }
+    public void setEnvironment(EnvironmentType environment) { this.environment = environment; }
     public String getProjectName() { return projectName; }
     public String getAppName() { return appName; }
     public String getMicroservice() { return microservice; }
