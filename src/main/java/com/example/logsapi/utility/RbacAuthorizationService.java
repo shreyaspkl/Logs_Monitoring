@@ -1,7 +1,9 @@
 package com.example.logsapi.utility;
 
+import com.example.logsapi.model.AccessRequest;
 import com.example.logsapi.model.PermissionCode;
 import com.example.logsapi.model.UserProjectRoleBinding;
+import com.example.logsapi.repository.AccessRequestRepository;
 import com.example.logsapi.repository.UserProjectRoleBindingRepository;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -12,9 +14,12 @@ import java.util.List;
 public class RbacAuthorizationService {
 
     private final UserProjectRoleBindingRepository bindingRepo;
+    private final AccessRequestRepository accessRequestRepository;
 
-    public RbacAuthorizationService(UserProjectRoleBindingRepository bindingRepo) {
+    public RbacAuthorizationService(UserProjectRoleBindingRepository bindingRepo,
+                                    AccessRequestRepository accessRequestRepository) {
         this.bindingRepo = bindingRepo;
+        this.accessRequestRepository = accessRequestRepository;
     }
 
     public boolean hasPermission(Authentication auth, Long projectId, String env, String permissionCode) {
@@ -32,5 +37,18 @@ public class RbacAuthorizationService {
     public List<UserProjectRoleBinding> getBindings(Authentication auth) {
         if (auth == null || auth.getName() == null) return List.of();
         return bindingRepo.findByUserUsername(auth.getName());
+    }
+
+    public boolean hasManagePermissionForAccessRequest(Authentication auth, Long requestId) {
+        if (auth == null || auth.getName() == null || requestId == null) {
+            return false;
+        }
+
+        AccessRequest request = accessRequestRepository.findById(requestId).orElse(null);
+        if (request == null) {
+            return false;
+        }
+
+        return hasPermission(auth, request.getProject().getId(), request.getEnvironment().name(), "ACCESS_MANAGE");
     }
 }

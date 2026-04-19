@@ -26,7 +26,8 @@ i.e.
 psql "External Database URL from Render"
 
 TIP:-
-Whenever free tier of PG DB is getting expire, then just create a new free tier PG DB in render by suspending/deleting old DBs and then once created change the values in application.properties.
+Whenever free tier of PG DB is getting expire, then just create a new free tier PG DB in render by suspending/deleting old DBs 
+and then once created change the values in application.properties.
 
 for local setup only/ no need to commit/push this fom application.properties
 spring.datasource.url=jdbc:postgresql://{here paste the part after @ in External Database URL from Render }

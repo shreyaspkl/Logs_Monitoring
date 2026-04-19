@@ -68,6 +68,57 @@ public class ProjectController {
                 .toList();
     }
 
+    @GetMapping("/requestable")
+    public List<ProjectResponseDto> listRequestableProjects(Authentication authentication) {
+        if (authentication == null || authentication.getName() == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "unauthorized");
+        }
+
+        return projectRepository.findAll().stream()
+                .filter(Project::isActive)
+                .map(this::toDto)
+                .toList();
+    }
+
+    @GetMapping("/scopes")
+    public List<ProjectScopeDto> listProjectScopes(Authentication authentication) {
+        if (authentication == null || authentication.getName() == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "unauthorized");
+        }
+
+        List<UserProjectRoleBinding> bindings = bindingRepository.findByUserUsername(authentication.getName());
+        if (bindings.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Long, List<UserProjectRoleBinding>> bindingsByProject = bindings.stream()
+                .filter(b -> b.getProject() != null && b.getRole() != null && b.getRole().getName() != null)
+                .filter(b -> RoleLevel.from(b.getRole().getName()).isAtLeast(RoleLevel.VIEWER))
+                .collect(Collectors.groupingBy(b -> b.getProject().getId()));
+
+        return bindingsByProject.values().stream()
+                .map(projectBindings -> {
+                    Project project = projectBindings.get(0).getProject();
+                    List<String> environments = projectBindings.stream()
+                            .map(binding -> binding.getEnvironment().name())
+                            .distinct()
+                            .sorted()
+                            .toList();
+
+                    String name = (project.getName() == null || project.getName().isBlank())
+                            ? project.getProjectKey()
+                            : project.getName();
+
+                    return new ProjectScopeDto(
+                            project.getId(),
+                            project.getProjectKey(),
+                            name,
+                            environments
+                    );
+                })
+                .toList();
+    }
+
     private ProjectResponseDto toDto(Project project) {
         String name = (project.getName() == null || project.getName().isBlank())
                 ? project.getProjectKey()
@@ -101,4 +152,11 @@ public class ProjectController {
             return a.ordinal() >= b.ordinal() ? a : b;
         }
     }
+
+    public record ProjectScopeDto(
+            Long id,
+            String projectKey,
+            String name,
+            List<String> environments
+    ) {}
 }
